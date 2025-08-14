@@ -1,0 +1,74 @@
+# Load packages
+library(survival)
+library(survminer)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(forestplot)
+
+# Load data
+cancer <- read_csv("C:/Users/alreada/Desktop/El futuro/DATASETs/cancer_survival.csv")
+
+# Format Data
+cancer2 <- cancer %>%
+  mutate(
+    time_days = time,
+    status2 = ifelse(status == 2, 1, 0), # 1 = death, 0 = censored
+    gender = ifelse(sex == 1, "Male", "Female")
+  )
+
+# View first 10 rows
+head(cancer2, 10)
+
+# Kaplan-Meier by intervention
+fit1 <- survfit(Surv(time_days, status2) ~ intervention, data = cancer2)
+ggsurvplot(fit1, data = cancer2, risk.table = TRUE, conf.int = TRUE,
+           title = "Kaplan-Meier Survival Curve by Intervention")
+
+# Cox regression: Intervention only
+cox1 <- coxph(Surv(time_days, status2) ~ intervention, data = cancer2)
+summary(cox1)
+
+# Stratify by Age
+cancer3 <- cancer2 %>%
+  mutate(AgeGroup = case_when(
+    age < 40 ~ "<40",
+    age >= 40 & age < 60 ~ "40-59",
+    age >= 60 ~ "60+"
+  ))
+
+# Kaplan-Meier: Intervention × Gender
+cancer4 <- cancer3 %>%
+  mutate(Group = paste(intervention, gender, sep = " / "))
+
+fit2 <- survfit(Surv(time_days, status2) ~ Group, data = cancer4)
+ggsurvplot(fit2, data = cancer4, risk.table = TRUE, conf.int = TRUE,
+           title = "Kaplan-Meier: Intervention × Gender")
+
+# Multivariable Cox regression
+cox2 <- coxph(Surv(time_days, status2) ~ intervention + gender + AgeGroup, data = cancer4)
+summary(cox2)
+
+# Median survival per group
+medians <- surv_median(fit2)
+medians
+
+# Baseline characteristics
+cancer2 %>%
+  group_by(intervention) %>%
+  summarise(across(c(age, time_days), list(mean = mean, sd = sd, median = median, min = min, max = max)))
+
+# T-tests
+t.test(age ~ intervention, data = cancer2)
+t.test(time_days ~ intervention, data = cancer2)
+
+# Wilcoxon test
+wilcox.test(age ~ intervention, data = cancer2)
+
+# Chi-square tests
+table1 <- table(cancer3$intervention, cancer3$AgeGroup)
+chisq.test(table1)
+
+table2 <- table(cancer2$intervention, cancer2$status2)
+chisq.test(table2)
+
