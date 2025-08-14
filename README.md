@@ -37,8 +37,8 @@ The workflow includes:
 
 ## 📷 Example Outputs
 
-<img width="45%" height="491" alt="Vis 2" src="https://github.com/user-attachments/assets/f3f7c621-d318-4415-bc61-c8af8e2ec4af" />
-<img width="45%" height="488" alt="Vis 1" src="https://github.com/user-attachments/assets/8eb304a4-87cd-46cf-a433-6df61c7be1a2" />
+<img width="45%" height="650" alt="Vis 2" src="https://github.com/user-attachments/assets/f3f7c621-d318-4415-bc61-c8af8e2ec4af" />
+<img width="45%" height="650" alt="Vis 1" src="https://github.com/user-attachments/assets/8eb304a4-87cd-46cf-a433-6df61c7be1a2" />
 
 ---
 
