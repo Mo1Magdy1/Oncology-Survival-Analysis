@@ -1,0 +1,125 @@
+/* load data */
+proc import 
+  datafile="/home/u63681137/cancer_survival.csv"
+  out=work.cancer
+  dbms=csv 
+  replace;
+  getnames=yes;
+run;
+
+/* Format Data */
+data work.cancer2;
+  set work.cancer;
+  time_days = time;
+  status2 = (status = 2); /* 1 = death, 0 = censored */
+
+  if sex = 1 then gender = "Male";
+  else if sex = 2 then gender = "Female";
+
+  label
+    time_days = "Survival Time (Days)"
+    status2   = "Death Event Indicator"
+    gender    = "Gender";
+run;
+
+/* View first 10 rows */
+proc print data=work.cancer2 (obs=10); run;
+
+/* Data Properities */
+proc contents data=work.cancer2; run;
+
+ods graphics on;
+
+/* Kaplan-Meier  */
+proc lifetest data=work.cancer2 plots=survival(cl atrisk);
+  time time_days*status2(0);
+  strata intervention;
+  title "Kaplan-Meier Survival Curve by Intervention";
+run;
+
+/* Cox Regression:  intervention */
+proc phreg data=work.cancer2;
+  class intervention (ref="Standard_Care");
+  model time_days*status2(0) = intervention / ties=efron;
+  hazardratio intervention / diff=ref;
+  title "Cox Regression: Intervention Only";
+run;
+
+/* Stratifying Age */
+data work.cancer3;
+  set work.cancer2;
+  if age < 40 then AgeGroup = "<40";
+  else if 40 <= age < 60 then AgeGroup = "40-59";
+  else if age >= 60 then AgeGroup = "60+";
+  label AgeGroup = "Age Group";
+run;
+
+/* Kaplan-Meier according to Intervention × Gender */
+data work.cancer4;
+  set work.cancer3;
+  Group = catx(" / ", intervention, gender);
+run;
+
+proc lifetest data=work.cancer4 plots=survival(cl atrisk);
+  time time_days*status2(0);
+  strata Group;
+  title "Kaplan-Meier: Intervention × Gender";
+run;
+
+/* Cox Regression: Age + Gender + Intervention */
+proc phreg data=work.cancer4;
+  class intervention (ref="Standard_Care") gender (ref="Male") AgeGroup (ref="<40");
+  model time_days*status2(0) = intervention gender AgeGroup / ties=efron;
+  hazardratio intervention / diff=ref;
+  hazardratio gender / diff=ref;
+  hazardratio AgeGroup / diff=ref;
+  title "Multivariable Cox Regression: Intervention + Gender + Age Group";
+run;
+
+/* Forest Plot */
+proc phreg data=work.cancer4;
+  class intervention (ref="Standard_Care") gender (ref="Male") AgeGroup (ref="<40");
+  model time_days*status2(0) = intervention gender AgeGroup / ties=efron;
+  hazardratio intervention / diff=ref;
+  hazardratio gender / diff=ref;
+  hazardratio AgeGroup / diff=ref;
+  title "Forest Plot: HR by Intervention, Gender, Age Group";
+run;
+
+/* Median Survival */
+proc lifetest data=work.cancer4;
+  time time_days*status2(0);
+  strata Group;
+  title "Median Survival Time by Group (Intervention × Gender)";
+run;
+
+/* Baseline characteristics per intervention */
+proc means data=work.cancer2 mean std median min max maxdec=1;
+  class intervention;
+  var age time_days;
+  title "Descriptive Statistics by Intervention";
+run;
+
+proc ttest data=work.cancer2;
+  class intervention;
+  var age time_days;
+  title "T-Test: Age and Survival Time by Intervention";
+run;
+
+proc npar1way data=work.cancer2 wilcoxon;
+  class intervention;
+  var age;
+  title "Wilcoxon Test: Age by Intervention";
+run;
+
+proc freq data=work.cancer3;
+  tables intervention*AgeGroup / chisq;
+  title "Chi-square Test: Age Group by Intervention";
+run;
+
+proc freq data=work.cancer2;
+  tables intervention*status2 / chisq;
+  title "Chi-square Test: Death Status by Intervention";
+run;
+
+ods graphics off;
