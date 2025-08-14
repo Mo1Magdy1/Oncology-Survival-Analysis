@@ -1,0 +1,95 @@
+import pandas as pd
+import numpy as np
+from lifelines import KaplanMeierFitter, CoxPHFitter
+from lifelines.statistics import logrank_test
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import ttest_ind, wilcoxon, chi2_contingency
+
+# Load data
+cancer = pd.read_csv(r"C:\Users\alreada\Desktop\El futuro\DATASETs\cancer_survival.csv")
+
+# Format data
+cancer['time_days'] = cancer['time']
+cancer['status2'] = np.where(cancer['status'] == 2, 1, 0)
+cancer['gender'] = np.where(cancer['sex'] == 1, "Male", "Female")
+
+# View first 10 rows
+print(cancer.head(10))
+
+# Kaplan-Meier by intervention
+kmf = KaplanMeierFitter()
+plt.figure(figsize=(8,6))
+for name, grouped_df in cancer.groupby('intervention'):
+    kmf.fit(grouped_df['time_days'], grouped_df['status2'], label=name)
+    kmf.plot_survival_function(ci_show=True)
+plt.title("Kaplan-Meier Survival Curve by Intervention")
+plt.show()
+
+# Cox regression: intervention only
+cox1 = CoxPHFitter()
+cox1.fit(cancer[['time_days','status2','intervention']], duration_col='time_days', event_col='status2', formula="intervention")
+print(cox1.summary)
+
+# Stratify by Age
+def age_group(age):
+    if age < 40:
+        return "<40"
+    elif age < 60:
+        return "40-59"
+    else:
+        return "60+"
+
+cancer['AgeGroup'] = cancer['age'].apply(age_group)
+
+# Kaplan-Meier: Intervention × Gender
+cancer['Group'] = cancer['intervention'] + " / " + cancer['gender']
+plt.figure(figsize=(8,6))
+for name, grouped_df in cancer.groupby('Group'):
+    kmf.fit(grouped_df['time_days'], grouped_df['status2'], label=name)
+    kmf.plot_survival_function(ci_show=True)
+plt.title("Kaplan-Meier: Intervention × Gender")
+plt.show()
+
+# Multivariable Cox regression
+cox2 = CoxPHFitter()
+cox2.fit(cancer[['time_days','status2','intervention','gender','AgeGroup']],
+         duration_col='time_days', event_col='status2',
+         formula="intervention + gender + AgeGroup")
+print(cox2.summary)
+
+# Forest plot
+cox2.plot()
+plt.title("Forest Plot: HR by Intervention, Gender, Age Group")
+plt.show()
+
+# Median survival per group
+median_survival = cancer.groupby('Group').apply(lambda df: KaplanMeierFitter().fit(df['time_days'], df['status2']).median_survival_time_)
+print(median_survival)
+
+# Baseline characteristics
+print(cancer.groupby('intervention')[['age','time_days']].agg(['mean','std','median','min','max']))
+
+# T-tests
+interventions = cancer['intervention'].unique()
+if len(interventions) == 2:  # T-test only valid for 2 groups
+    g1 = cancer[cancer['intervention'] == interventions[0]]['age']
+    g2 = cancer[cancer['intervention'] == interventions[1]]['age']
+    print("T-test age:", ttest_ind(g1, g2))
+    
+    g1 = cancer[cancer['intervention'] == interventions[0]]['time_days']
+    g2 = cancer[cancer['intervention'] == interventions[1]]['time_days']
+    print("T-test time_days:", ttest_ind(g1, g2))
+
+# Wilcoxon test (2 groups only)
+if len(interventions) == 2:
+    g1 = cancer[cancer['intervention'] == interventions[0]]['age']
+    g2 = cancer[cancer['intervention'] == interventions[1]]['age']
+    print("Wilcoxon:", wilcoxon(g1, g2))
+
+# Chi-square tests
+chi1 = pd.crosstab(cancer['intervention'], cancer['AgeGroup'])
+print("Chi-square AgeGroup by Intervention:", chi2_contingency(chi1))
+
+chi2 = pd.crosstab(cancer['intervention'], cancer['status2'])
+print("Chi-square Status by Intervention:", chi2_contingency(chi2))
