@@ -123,3 +123,4 @@ proc freq data=work.cancer2;
 run;
 
 ods graphics off;
+
